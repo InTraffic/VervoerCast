@@ -2,6 +2,22 @@ from bs4 import BeautifulSoup
 import sys
 import datetime
 import logging
+import json
+import os
+
+
+class ConfigError(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
+def read_config():
+    config_file_name = "{}/vervoercast_config.json".format(os.environ['HOME'])
+    with open(config_file_name) as json_data_file:
+        config = json.load(json_data_file)
+        return config
+    raise ConfigError("Cannot read configuration file")
 
 def extract_forecast_text(soup):
     lines = []
@@ -31,6 +47,8 @@ def extract_forecast_table(soup):
 
 
 if __name__ == "__main__":
+    configuration = read_config()
+
     today    = datetime.date.today()
 
     # Parse the forecast page
@@ -46,8 +64,7 @@ if __name__ == "__main__":
     tomorrow = today + datetime.timedelta(days=1)
 
     # Check if the forecast is indeed for tomorrow.
-    ist_date = datetime.datetime.strptime(
-            tomorrows_forecast[0], "%d-%m-%Y")
+    ist_date = datetime.datetime.strptime(tomorrows_forecast[0], "%d-%m-%Y")
     if tomorrow == ist_date.date():
         datastring = " ".join(tomorrows_forecast)
     else:
@@ -55,6 +72,22 @@ if __name__ == "__main__":
         pass
 
     datastring = str(today) + ',"' + datastring + '"'
-    print(datastring)
-    print(forecast_text)
+    path = os.path.join(configuration['datadir'], "KNMI/Verwachting")
+
+    if os.path.isdir(path):
+        text_forecast_filename = today.strftime("%Y-%m-%d-forecasttext.txt")
+        text_forecast_path = os.path.join(path, text_forecast_filename)
+        with open(text_forecast_path, "w", encoding="utf-8") as outpf:
+            outpf.write(forecast_text)
+        forecast_filename = today.strftime("%Y-%m-%d-forecast.csv")
+        forecast_path = os.path.join(path, forecast_filename)
+        with open(forecast_path, "w", encoding="utf-8") as outpf:
+            outpf.write("datestamp,text\n")
+            for f in forecast:
+                outpf.write(",".join([f[0], '"' + " ".join(f[1:]) + '"']))
+                outpf.write("\n")
+
+    else:
+        pass
+        # Datadirectory does not exist
 
